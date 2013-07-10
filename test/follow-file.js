@@ -16,9 +16,9 @@ describe('Follow', function () {
     writeRemaining(stream, 10, done);
   })
 
-//  after(function(done) {
-//    fs.unlink(tmpPath, done);
-//  })
+  after(function(done) {
+    fs.unlink(tmpPath, done);
+  })
 
   function writeRemaining(stream, count, cb){
     log('appending')
@@ -76,10 +76,7 @@ describe('Follow', function () {
         this.destroy();
         done()
       }
-    })
 
-    setInterval(function(){
-      log('lines are', lines)
       if (lines === 5 && !deleted){
         deleted = true
         log('delete file')
@@ -91,11 +88,10 @@ describe('Follow', function () {
           })
         })
       }
-
-    }, 10)
+    })
   })
 
-  it.only('should follow a file even if it is emptied', function(done){
+  it('should follow a file even if it is emptied', function(done){
 
     var lines = 0
     var totalLines = 25
@@ -112,18 +108,10 @@ describe('Follow', function () {
         empty = true
         log('empty file')
         var stream = fs.createWriteStream(tmpPath, {flags: 'w'})
-//        setTimeout(function() {
-          writeRemaining(stream, 20, function(){
-            log('finished')
-          })
-//        }, 10)
+        writeRemaining(stream, 20, function(){
+          log('finished')
+        })
       }
     })
-
-//    setInterval(function(){
-//      log('lines are', lines)
-//
-//
-//    }, 10)
   })
 })
