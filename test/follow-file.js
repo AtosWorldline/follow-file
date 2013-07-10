@@ -2,32 +2,42 @@
 var path = require('path')
 var fs = require('fs')
 var expect = require('chai').expect
-var mkdirp = require('mkdirp')
-var rimraf = require('rimraf')
 var log = require('debug')('test')
 
 var ff = require('../index.js')
 
 describe('Follow', function () {
 
+  var tmpPath = path.join(__dirname, 'tmp.log');
+
+  beforeEach(function(done) {
+    var stream = fs.createWriteStream(tmpPath, {flags: 'w'})
+    log('started')
+    writeRemaining(stream, 10, done);
+  })
+
+//  after(function(done) {
+//    fs.unlink(tmpPath, done);
+//  })
 
   function writeRemaining(stream, count, cb){
     log('appending')
     for (var i = 0; i < count; i++){
       stream.write('Jun 16 10:20:58 server.hostname coreaudiod[121]: Enabled automatic stack shots because audio IO is inactive ' + i + ' \n', 'utf-8')
     }
-    stream.on('end', cb)
+    stream.once('drain',cb);
   }
 
   it('should read through the file when it starts', function (done) {
 
     var lines = 0
 
-    ff(path.join(__dirname, 'syslog.log'), {start: 100}).on('data', function (line) {
+    ff(tmpPath, {start: 8}).on('data', function (line) {
       log('line', line)
       lines++
       if (lines === 8) {
-        done()
+        this.destroy();
+        done();
       }
     })
 
@@ -35,56 +45,47 @@ describe('Follow', function () {
 
   it('should follow updates to the file', function (done) {
 
-    rimraf(path.join(__dirname, 'tmp'), function () {
+    var stream = fs.createWriteStream(tmpPath, {flags: 'a'})
 
-      mkdirp(path.join(__dirname, 'tmp'), function () {
+    log('started')
+    var lines = -1
+    var totalLines = 80
 
-        log('started')
-        fs.createReadStream(path.join(__dirname, 'syslog.log'), {start: 0, end: 860}).pipe(fs.createWriteStream(path.join(__dirname, 'tmp', 'syslog.log'))).on('close', function(){
-          log('finished initial read')
-          var lines = 0
-          var totalLines = 80
-
-          ff(path.join(__dirname, 'tmp', 'syslog.log'), {start: 100}).on('data', function (line) {
-            log('lines++', lines++)
-            if (lines === totalLines) {
-              done()
-            }
-          })
-
-          var stream = fs.createWriteStream(path.join(__dirname, 'tmp', 'syslog.log'), {flags: 'a'})
-
-          writeRemaining(stream, 72, function(){
-            log('finished extra write')
-          })
-
+    ff(tmpPath, {start: 1}).on('data', function (line) {
+      log('lines++', lines++, line)
+      if (lines === totalLines) {
+        this.destroy();
+        done()
+      }
+    }).once('data', function() {
+        writeRemaining(stream, totalLines, function(){
+          log('finished extra write')
         })
       })
-    })
   })
 
   it('should follow a file even if it is deleted', function(done){
 
     var lines = 0
-    var totalLines = 100
+    var totalLines = 25
     var deleted = false
-    ff(path.join(__dirname, 'tmp', 'syslog.log'), {start: 100}).on('data', function (line) {
-      log('lines++', lines++)
-      if (lines === totalLines) {
+    ff(tmpPath, {start: 5}).on('data', function (line) {
+      log('lines++', lines++, line)
+      if (lines >= totalLines) {
         log('all done')
+        this.destroy();
         done()
       }
-
     })
 
     setInterval(function(){
       log('lines are', lines)
-      if (lines === 80 && !deleted){
+      if (lines === 5 && !deleted){
         deleted = true
         log('delete file')
-        fs.unlink(path.join(__dirname, 'tmp', 'syslog.log'), function(){
-          log('create file.')
-          var stream = fs.createWriteStream(path.join(__dirname, 'tmp', 'syslog.log'), {flags: 'w'})
+        fs.unlink(tmpPath, function(){
+          log('create file')
+          var stream = fs.createWriteStream(tmpPath, {flags: 'w'})
           writeRemaining(stream, 20, function(){
             log('finished')
           })
@@ -94,4 +95,35 @@ describe('Follow', function () {
     }, 10)
   })
 
+  it.only('should follow a file even if it is emptied', function(done){
+
+    var lines = 0
+    var totalLines = 25
+    var empty = false
+    ff(tmpPath, {start: 5}).on('data', function (line) {
+      log('lines++', lines++, line)
+      if (lines >= totalLines) {
+        log('all done')
+        this.destroy();
+        done()
+      }
+
+      if (lines === 5 && !empty){
+        empty = true
+        log('empty file')
+        var stream = fs.createWriteStream(tmpPath, {flags: 'w'})
+//        setTimeout(function() {
+          writeRemaining(stream, 20, function(){
+            log('finished')
+          })
+//        }, 10)
+      }
+    })
+
+//    setInterval(function(){
+//      log('lines are', lines)
+//
+//
+//    }, 10)
+  })
 })
